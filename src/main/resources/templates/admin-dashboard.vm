@@ -1,0 +1,80 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Jira Dashboard Erweiterung</title>
+    <style>
+            .dashboard-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            width: 100%;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+            flex-grow: 1;
+            flex-basis: calc(50% - 20px); /* Adjust '20px' if changing gap size */
+        }
+        h2 {
+            color: #0052cc;
+        }
+        .card h3 {
+            color: #42526e;
+            margin-bottom: 16px;
+        }
+        button {
+            background-color: #0052cc;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: block;
+        }
+        button:hover {
+            background-color: #0747a6;
+        }
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .card {
+                flex-basis: 100%;
+            }
+        }
+    </style>
+
+</head>
+<body>
+    <div class="dashboard-container">
+        <div class="card" id="tools">
+            <h2>Anpassbare Tools</h2>
+            <h3>Hier können Sie Ihre Tools anpassen oder entfernen</h3>
+            
+
+
+        </div>
+
+        <div class="card" id="scripts">
+            <h2>Dynamische Skripte</h2>
+            <h3>Hier können Sie neue Skripte erstellen und verwalten</h3>
+            
+
+
+        </div>
+
+        <div class="card" id="license-groups">
+            <h2>Lizenzgruppen Übersicht</h2>
+            <h3>Details zu den Lizenzgruppen Ihrer Benutzer</h3>
+                <div id="user-list">
+
+                </div>
+
+        </div>
+    </div>
+</body>
+</html>
