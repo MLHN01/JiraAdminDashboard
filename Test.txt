@@ -1,7 +1,7 @@
-Test
 import com.atlassian.jira.component.ComponentAccessor
 import com.atlassian.audit.api.AuditService
-import com.atlassian.audit.entity.AuditRecord
+import com.atlassian.audit.entity.AuditQuery
+import com.atlassian.audit.entity.AuditResource
 import java.time.ZoneId
 
 def crowdService = ComponentAccessor.crowdService
@@ -12,9 +12,9 @@ def dateLimit = (new Date()) - 90 // z.B. 90 Tage Limit für Inaktivität
 def result = ""
 
 def userSearchParamsBuilder = new com.atlassian.jira.bc.user.search.UserSearchParams.Builder()
-        .allowEmptyQuery(true)
-        .ignorePermissionCheck(true)
-        .build()
+    .allowEmptyQuery(true)
+    .ignorePermissionCheck(true)
+    .build()
 
 def allActiveUsers = userService.findUsers("", userSearchParamsBuilder)
 
@@ -29,18 +29,18 @@ allActiveUsers.each { appuser ->
         }
     }
 
-    // Letzte Deaktivierung per AuditService holen
-    def deactivationDate = null
-    def records = auditService.getRecords(0, 1000) // letzte 1000 Audit Records (Passe ggf. an, wenn viele Einträge vorhanden sind!)
-            .findAll { record ->
-                record.action == "User deactivated" &&
-                record.affectedObjects.any { it.name == appuser.name }
-            }
-            .sort { -it.created.toEpochMilli() }
+    // Jetzt Audit-Logs abfragen, um letzte Deaktivierung zu finden
+    def auditQuery = AuditQuery.builder()
+        .resourceName(appuser.name)
+        .actions("User deactivated")
+        .maxResults(1)
+        .build()
 
-    if (records) {
-        AuditRecord lastDeactivation = records.first()
-        deactivationDate = Date.from(lastDeactivation.created.atZone(ZoneId.systemDefault()).toInstant())
+    def auditQueryResult = auditService.getRecords(auditQuery)
+
+    if (auditQueryResult.records) {
+        def auditRecord = auditQueryResult.records.first()
+        def deactivationDate = Date.from(auditRecord.created.atZone(ZoneId.systemDefault()).toInstant())
         result += "User ${appuser.getDisplayName()} was last deactivated on: ${deactivationDate.format("dd.MM.yyyy HH:mm")}<br>"
     }
 }
