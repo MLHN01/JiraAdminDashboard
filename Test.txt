@@ -1,48 +1,25 @@
 import com.atlassian.jira.component.ComponentAccessor
 import com.atlassian.audit.api.AuditService
-import com.atlassian.audit.entity.AuditQuery
-import com.atlassian.audit.entity.AuditResource
 import java.time.ZoneId
 
-def crowdService = ComponentAccessor.crowdService
-def userService = ComponentAccessor.getComponent(com.atlassian.jira.bc.user.search.UserSearchService)
-def auditService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditService)
+/**
+ * Gibt das Datum zurück, an dem der Nutzer zuletzt deaktiviert wurde, oder null falls nicht gefunden.
+ *
+ * @param username der Nutzername des betroffenen Nutzers
+ * @return Date der letzten Deaktivierung oder null
+ */
+Date getLastDeactivationDate(String username) {
+    def auditService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditService)
 
-def dateLimit = (new Date()) - 90 // z.B. 90 Tage Limit für Inaktivität
-def result = ""
+    def records = auditService.getRecords(0, 1000).findAll { record ->
+        record.action == "User deactivated" &&
+        record.affectedObjects.any { it.name == username }
+    }.sort { -it.created.toEpochMilli() }
 
-def userSearchParamsBuilder = new com.atlassian.jira.bc.user.search.UserSearchParams.Builder()
-    .allowEmptyQuery(true)
-    .ignorePermissionCheck(true)
-    .build()
-
-def allActiveUsers = userService.findUsers("", userSearchParamsBuilder)
-
-allActiveUsers.each { appuser ->
-    def user = crowdService.getUserWithAttributes(appuser.getName())
-    String lastLoginMillis = user.getValue('login.lastLoginMillis')
-
-    if (lastLoginMillis?.isNumber()) {
-        Date lastLoginDate = new Date(Long.parseLong(lastLoginMillis))
-        if (lastLoginDate.before(dateLimit)) {
-            result += "Inactive user: ${appuser.getDisplayName()} - last login: ${lastLoginDate.format("dd.MM.yyyy HH:mm")}<br>"
-        }
+    if (records) {
+        def lastDeactivation = records.first()
+        return Date.from(lastDeactivation.created.atZone(ZoneId.systemDefault()).toInstant())
     }
 
-    // Jetzt Audit-Logs abfragen, um letzte Deaktivierung zu finden
-    def auditQuery = AuditQuery.builder()
-        .resourceName(appuser.name)
-        .actions("User deactivated")
-        .maxResults(1)
-        .build()
-
-    def auditQueryResult = auditService.getRecords(auditQuery)
-
-    if (auditQueryResult.records) {
-        def auditRecord = auditQueryResult.records.first()
-        def deactivationDate = Date.from(auditRecord.created.atZone(ZoneId.systemDefault()).toInstant())
-        result += "User ${appuser.getDisplayName()} was last deactivated on: ${deactivationDate.format("dd.MM.yyyy HH:mm")}<br>"
-    }
+    return null
 }
-
-return result
