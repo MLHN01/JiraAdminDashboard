@@ -1,27 +1,20 @@
-import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.audit.api.AuditSearchService
-import com.atlassian.audit.api.AuditQuery
-import java.time.ZoneId
-
-/**
- * Liefert das Datum der letzten Deaktivierung des Nutzers anhand AuditSearchService.
- *
- * @param username Nutzername des Jira-Nutzers
- * @return Date der letzten Deaktivierung oder null
- */
 Date getLastDeactivationDate(String username) {
     def auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
 
-    def query = AuditQuery.builder()
-        .actions("User deactivated")
-        .affectedObject(username)
-        .maxResults(1)
-        .build()
+    def offset = 0
+    def limit = 1000 // Anzahl der Audit-Log-Einträge zum Durchsuchen (anpassen, wenn nötig)
 
-    def results = auditSearchService.getRecords(query)
+    def records = auditSearchService.getRecords(offset, limit)
+        .findAll { AuditRecord record ->
+            record.action == "User deactivated" && 
+            record.affectedObjects.any { AuditResource resource ->
+                resource.name == username
+            }
+        }
+        .sort { a, b -> b.created <=> a.created }
 
-    if (results && results.records) {
-        return Date.from(results.records.first().created.atZone(ZoneId.systemDefault()).toInstant())
+    if (records) {
+        return Date.from(records.first().created.atZone(ZoneId.systemDefault()).toInstant())
     }
 
     return null
