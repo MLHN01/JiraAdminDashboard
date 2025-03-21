@@ -2,19 +2,19 @@ Date getLastDeactivationDate(String username) {
     def auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
 
     def offset = 0
-    def limit = 1000 // Anzahl der Audit-Log-Einträge zum Durchsuchen (anpassen, wenn nötig)
+    def limit = 1000 // Anzahl der Audit-Log-Einträge zum Durchsuchen (falls nötig anpassen)
 
     def records = auditSearchService.getRecords(offset, limit)
-        .findAll { AuditRecord record ->
-            record.action == "User deactivated" && 
-            record.affectedObjects.any { AuditResource resource ->
-                resource.name == username
+        .findAll { AuditEntity entity ->
+            entity.getAuditType().getName() == "User deactivated" &&
+            entity.getAffectedObjects().any { AuditResource resource ->
+                resource.getName() == username
             }
         }
-        .sort { a, b -> b.created <=> a.created }
+        .sort { a, b -> b.getCreated().toEpochMilli() <=> a.getCreated().toEpochMilli() }
 
     if (records) {
-        return Date.from(records.first().created.atZone(ZoneId.systemDefault()).toInstant())
+        return Date.from(records.first().getCreated().atZone(ZoneId.systemDefault()).toInstant())
     }
 
     return null
