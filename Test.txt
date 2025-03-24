@@ -1,73 +1,39 @@
-
-import com.atlassian.audit.api.AuditSearchService
+import com.atlassian.sal.api.component.ComponentLocator
+import com.atlassian.audit.api.AuditService
+import com.atlassian.audit.api.AuditRecord
 import com.atlassian.audit.api.AuditQuery
-import com.atlassian.audit.api.util.pagination.Page
-import com.atlassian.audit.api.util.pagination.PageRequest
-import com.atlassian.audit.api.cursor.AuditEntityCursor
-import com.atlassian.audit.entity.AuditEntity
+import com.atlassian.audit.api.AuditRecordFilter
+import com.atlassian.audit.api.AuditCategory
 
-import java.time.ZoneId
+// AuditService holen
+def auditService = ComponentLocator.getComponent(AuditService)
 
-Date getLastDeactivationDate(String username) {
-    // AuditSearchService über OSGi abfragen
-    def auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
+// Suchzeitraum (z.B. letzte 90 Tage)
+def now = new Date()
+def startDate = now - 90
 
-    // AuditQuery erstellen: wir suchen gezielt nach "User deactivated"
-    def auditQuery = AuditQuery.builder()
-            .actions("User deactivated")
-            .build()
+// AuditQuery bauen
+def query = AuditQuery.builder()
+    .fromDate(startDate)
+    .toDate(now)
+    .maxResults(1000) // Optional: Limit auf Anzahl der Einträge
+    .build()
 
-    // Hier sammeln wir alle passenden Audit-Entities ein
-    List<AuditEntity> allMatches = []
+// Suche ausführen
+def result = auditService.getRecords(query)
 
-    // Offset-basierte Pagination
-    int offset = 0
-    int limit = 50
-    int scanLimit = 1_000_000  // max. Anzahl Entities, die wir insgesamt scannen (anpassbar)
+// Ergebnis filtern nach "Benutzer deaktiviert"
+def matches = result.records.findAll { AuditRecord record ->
+    record.summary?.toLowerCase()?.contains("user deactivated") ||
+    record.summary?.toLowerCase()?.contains("benutzer deaktiviert")
+}
 
-    while (true) {
-        def pageRequest = new PageRequest.Builder<AuditEntityCursor>()
-                .offset(offset)
-                .limit(limit)
-                .build()
-
-        // Audit-Entities auslesen
-        Page<AuditEntity, AuditEntityCursor> page = auditSearchService.findBy(auditQuery, pageRequest, scanLimit)
-        if (!page || !page.results) {
-            // Nichts (mehr) gefunden, Schleife beenden
-            break
-        }
-
-        // Aus den gefundenen Entities nur jene behalten, die den gesuchten user betreffen
-        def matchingThisPage = page.results.findAll { entity ->
-            entity.affectedObjects.any { resource ->
-                resource.name == username
-            }
-        }
-        allMatches.addAll(matchingThisPage)
-
-        // Prüfen, ob es noch eine Folgeseite gibt
-        def nextPageRequest = page.getNextPageRequest()
-        if (!nextPageRequest) {
-            // Keine weitere Seite vorhanden
-            break
-        }
-
-        // Nächste Seite anhand offset
-        offset += limit
-    }
-
-    if (!allMatches) {
-        // Keine Deaktivierungs-Events für diesen User gefunden
-        return null
-    }
-
-    // Sortiere absteigend nach Erstellungszeit
-    allMatches.sort { a, b ->
-        b.created.toEpochMilli() <=> a.created.toEpochMilli()
-    }
-
-    // Der erste Eintrag in absteigender Reihenfolge ist die letzte Deaktivierung
-    def latest = allMatches.first()
-    return Date.from(latest.created.atZone(ZoneId.systemDefault()).toInstant())
+// Ausgabe
+return matches.collect { record ->
+    [
+        Zeitpunkt: record.created,
+        Aktion: record.summary,
+        Kategorie: record.category?.name,
+        Beteiligte: record.affectedObjects?.collect { it.name }?.join(', ')
+    ]
 }
