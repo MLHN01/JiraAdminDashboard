@@ -1,33 +1,47 @@
 import com.atlassian.sal.api.component.ComponentLocator
-import com.atlassian.audit.api.AuditService
+import com.atlassian.audit.api.AuditSearchService
+import com.atlassian.audit.api.AuditQuery
 import com.atlassian.audit.entity.AuditEntity
-import com.atlassian.audit.entity.AffectedObject
+import com.atlassian.audit.entity.AuditEntityCursor
+import com.atlassian.audit.entity.AuditResource
+import com.atlassian.audit.api.PageRequest
 import java.time.Instant
 import java.time.temporal.ChronoUnit
 
-// AuditService holen
-def auditService = ComponentLocator.getComponent(AuditService)
+// AuditSearchService abrufen
+def auditSearchService = ComponentLocator.getComponent(AuditSearchService)
 
-// Zeitraum (z.B. letzte 60 Tage)
+// Zeitraum definieren (z.B. die letzten 60 Tage)
 def fromDate = Instant.now().minus(60, ChronoUnit.DAYS)
 def toDate = Instant.now()
 
-// Audit-Events laden
-def auditEvents = auditService.getEntities(fromDate, toDate, 0, 1000)
+// AuditQuery erstellen (nur grobe Filterung nach Zeitraum)
+def auditQuery = AuditQuery.builder()
+    .from(fromDate)
+    .to(toDate)
+    .build()
 
-// Filtern nach Events, wo Benutzer deaktiviert wurden
-def userDeactivatedEvents = auditEvents.findAll { AuditEntity event ->
+// PageRequest für Pagination erstellen
+def pageRequest = new PageRequest.Builder<AuditEntityCursor>()
+    .offset(0)
+    .limit(500)
+    .build()
+
+// Audit-Einträge laden
+def pageResult = auditSearchService.findBy(auditQuery, pageRequest)
+
+// Filtere nach Benutzer-Deaktivierungsereignissen (Summary beachten!)
+def userDeactivatedEvents = pageResult.values.findAll { AuditEntity event ->
     event.summary?.toLowerCase().contains("user deactivated") ||
     event.summary?.toLowerCase().contains("benutzer deaktiviert")
 }
 
-// Ergebnisse übersichtlich auflisten
+// Ergebnis formatieren und ausgeben
 return userDeactivatedEvents.collect { event ->
-    def affectedUsers = event.affectedObjects.collect { AffectedObject obj -> obj.name }.join(", ")
     [
-        Datum        : event.created,
-        Aktion       : event.summary,
-        DurchgeführtVon: event.author?.name,
-        BetroffeneBenutzer: affectedUsers
+        Datum              : event.created,
+        Aktion             : event.summary,
+        DurchgeführtVon    : event.author?.name,
+        BetroffenerBenutzer: event.affectedObject?.name
     ]
 }
