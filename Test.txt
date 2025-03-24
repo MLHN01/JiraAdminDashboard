@@ -1,39 +1,33 @@
 import com.atlassian.sal.api.component.ComponentLocator
 import com.atlassian.audit.api.AuditService
-import com.atlassian.audit.api.AuditRecord
-import com.atlassian.audit.api.AuditQuery
-import com.atlassian.audit.api.AuditRecordFilter
-import com.atlassian.audit.api.AuditCategory
+import com.atlassian.audit.entity.AuditEntity
+import com.atlassian.audit.entity.AffectedObject
+import java.time.Instant
+import java.time.temporal.ChronoUnit
 
 // AuditService holen
 def auditService = ComponentLocator.getComponent(AuditService)
 
-// Suchzeitraum (z.B. letzte 90 Tage)
-def now = new Date()
-def startDate = now - 90
+// Zeitraum (z.B. letzte 60 Tage)
+def fromDate = Instant.now().minus(60, ChronoUnit.DAYS)
+def toDate = Instant.now()
 
-// AuditQuery bauen
-def query = AuditQuery.builder()
-    .fromDate(startDate)
-    .toDate(now)
-    .maxResults(1000) // Optional: Limit auf Anzahl der Einträge
-    .build()
+// Audit-Events laden
+def auditEvents = auditService.getEntities(fromDate, toDate, 0, 1000)
 
-// Suche ausführen
-def result = auditService.getRecords(query)
-
-// Ergebnis filtern nach "Benutzer deaktiviert"
-def matches = result.records.findAll { AuditRecord record ->
-    record.summary?.toLowerCase()?.contains("user deactivated") ||
-    record.summary?.toLowerCase()?.contains("benutzer deaktiviert")
+// Filtern nach Events, wo Benutzer deaktiviert wurden
+def userDeactivatedEvents = auditEvents.findAll { AuditEntity event ->
+    event.summary?.toLowerCase().contains("user deactivated") ||
+    event.summary?.toLowerCase().contains("benutzer deaktiviert")
 }
 
-// Ausgabe
-return matches.collect { record ->
+// Ergebnisse übersichtlich auflisten
+return userDeactivatedEvents.collect { event ->
+    def affectedUsers = event.affectedObjects.collect { AffectedObject obj -> obj.name }.join(", ")
     [
-        Zeitpunkt: record.created,
-        Aktion: record.summary,
-        Kategorie: record.category?.name,
-        Beteiligte: record.affectedObjects?.collect { it.name }?.join(', ')
+        Datum        : event.created,
+        Aktion       : event.summary,
+        DurchgeführtVon: event.author?.name,
+        BetroffeneBenutzer: affectedUsers
     ]
 }
