@@ -1,17 +1,26 @@
-import com.atlassian.audit.api.AuditEntityCursor
-import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.audit.api.AuditSearchService
-import com.atlassian.audit.api.AuditQuery
-import com.atlassian.audit.api.util.pagination.PageRequest
+Date getLastUserDeactivationDate(String username) {
+    def auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
 
-AuditSearchService auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
-AuditQuery auditQuery = AuditQuery.builder().searchText("User deactivated").build()
+    def auditQuery = AuditQuery.builder()
+        .searchText("User deactivated")
+        .build()
 
-// from https://developer.atlassian.com/server/framework/atlassian-sdk/audit/
-final PageRequest<AuditEntityCursor> pageRequest = new PageRequest.Builder<AuditEntityCursor>()
-                .offset(0)
-                .limit(100)
-                .build();
+    def pageRequest = new PageRequest.Builder<AuditEntityCursor>()
+        .offset(0)
+        .limit(500)
+        .build()
 
-// Intended usage:
-def results = auditSearchService.findBy(auditQuery, pageRequest)
+    def results = auditSearchService.findBy(auditQuery, pageRequest)
+
+    // Filter results by username (affected object)
+    def userDeactivationDates = results.values.findAll { AuditEntity entity ->
+        entity.affectedObjects.any { affectedObject ->
+            affectedObject.name.equalsIgnoreCase(username)
+        }
+    }.collect { entity ->
+        entity.created
+    }
+
+    // Find latest date or null if no deactivation occurred
+    return userDeactivationDates ? Date.from(userDeactivationDates.max()) : null
+}
