@@ -1,31 +1,17 @@
+import com.atlassian.audit.api.AuditEntityCursor
 import com.atlassian.jira.component.ComponentAccessor
 import com.atlassian.audit.api.AuditSearchService
 import com.atlassian.audit.api.AuditQuery
-import com.atlassian.audit.api.pagination.PageRequests
-import com.atlassian.audit.entity.AuditEntity
+import com.atlassian.audit.api.util.pagination.PageRequest
 
-// AuditSearchService über OSGi holen
-def auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
+AuditSearchService auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
+AuditQuery auditQuery = AuditQuery.builder().searchText("User deactivated").build()
 
-// AuditQuery erstellen (z.B. nach "User deaktiviert" suchen)
-def auditQuery = AuditQuery.builder()
-    .searchText("User deaktiviert")
-    .build()
+// from https://developer.atlassian.com/server/framework/atlassian-sdk/audit/
+final PageRequest<AuditEntityCursor> pageRequest = new PageRequest.Builder<AuditEntityCursor>()
+                .offset(0)
+                .limit(100)
+                .build();
 
-// PageRequest erstellen (z.B. erste Seite mit 100 Treffern)
-def pageRequest = PageRequests.limit(100)
-
-// Suche ausführen
-def auditPage = auditSearchService.findBy(auditQuery, pageRequest)
-
-// Ergebnisse verarbeiten
-def allMatches = auditPage.getValues().collect { AuditEntity entity ->
-    [
-        Datum       : entity.created,
-        Aktion      : entity.summary,
-        Autor       : entity.author?.name,
-        Betroffene  : entity.affectedObjects*.name.join(", ")
-    ]
-}
-
-return allMatches
+// Intended usage:
+def results = auditSearchService.findBy(auditQuery, pageRequest)
