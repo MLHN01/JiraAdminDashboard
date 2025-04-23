@@ -1,66 +1,9 @@
-import com.atlassian.audit.api.*
-import com.atlassian.audit.api.util.pagination.PageRequest
-import com.atlassian.audit.entity.AuditEntity
-import com.atlassian.crowd.embedded.api.UserWithAttributes
-import com.atlassian.jira.bc.user.search.UserSearchParams
-import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.jira.user.ApplicationUser
-import com.atlassian.application.api.ApplicationKeys
-
-// Parameter
-@ShortTextInput(label = "Monate", description = "Alle Nutzer, die X Monate inaktiv waren")
-String monthsParam
-
-int months = monthsParam as int
-int inactivityThresholdDays = months * 31
-Date inactivityLimitDate = (new Date()) - inactivityThresholdDays
-
-// User, die nicht deaktiviert werden sollen
-def blockedUsers = ["administrator"]
-
-// Services
-AuditSearchService auditSearchService = ComponentAccessor.getOSGiComponentInstanceOfType(AuditSearchService)
-def userSearchService = ComponentAccessor.getComponent(com.atlassian.jira.bc.user.search.UserSearchService)
-def crowdService = ComponentAccessor.crowdService
-
-// Hilfsmethode: Letztes Deaktivierungsdatum ermitteln
-Date getLastUserDeactivationDate(String username) {
-    def auditQuery = AuditQuery.builder().searchText("User deactivated").build()
-    def pageRequest = new PageRequest.Builder<AuditEntityCursor>().offset(0).limit(10000).build()
-    def results = auditSearchService.findBy(auditQuery, pageRequest)
-
-    def userDeactivationDates = results.values.findAll { AuditEntity entity ->
-        entity.affectedObjects.any { it.name.equalsIgnoreCase(username) }
-    }.collect { it.timestamp }
-
-    return userDeactivationDates ? Date.from(userDeactivationDates.max()) : null
-}
-
-// Alle aktiven Nutzer abrufen
-def userParams = new UserSearchParams.Builder().allowEmptyQuery(true).ignorePermissionCheck(true).build()
-def allActiveUsers = userSearchService.findUsers("", userParams).findAll { 
-    !blockedUsers.contains(it.name) 
-}
-
-// Ausgabe in HTML-Tabelle erstellen
-StringBuilder html = new StringBuilder("<table border='1' style='border-collapse: collapse;'>")
-html << "<tr><th>Benutzername</th><th>Letzter Login</th><th>Letzte Deaktivierung</th></tr>"
-
-allActiveUsers.each { ApplicationUser appUser ->
-    UserWithAttributes userAttr = crowdService.getUserWithAttributes(appUser.username)
-    def lastLoginMillis = userAttr.getValue('login.lastLoginMillis')
-
-    Date lastLogin = lastLoginMillis ? new Date(Long.parseLong(lastLoginMillis)) : null
-
-    if (!lastLogin || lastLogin.before(inactivityLimitDate)) {
-        def lastDeactivated = getLastUserDeactivationDate(appUser.username)
-        html << "<tr><td>${appUser.displayName}</td>"
-        html << "<td>${lastLogin ? lastLogin.format('dd.MM.yyyy HH:mm') : 'Noch nie eingeloggt'}</td>"
-        html << "<td>${lastDeactivated ? lastDeactivated.format('dd.MM.yyyy HH:mm') : 'Noch nie deaktiviert'}</td></tr>"
-    }
-}
-
-html << "</table>"
-
-return html.toString()
-
+// AUI-Message Box mit Icon
+return """
+<div class="aui-message aui-message-warning" style="margin-top:1em">
+    <span class="aui-icon aui-icon-warning"></span>
+    <strong>Wichtiger Hinweis:&nbsp;</strong>
+    Bitte prüfe vor dem Anlegen, ob der Mitarbeiter bereits im <em>AD</em> vorhanden ist
+    und ob die korrekte E-Mail-Domain verwendet wird.
+</div>
+"""
