@@ -1,33 +1,60 @@
-@Grab(group='commons-io', module='commons-io', version='2.15.1')    // nur falls nicht schon vorhanden
+/*
+ *  ArchiveProjectAsZip.groovy
+ *  Exportiert alle Vorgänge + Anhänge eines Projekts in ein ZIP.
+ *
+ *  Voraussetzungen:
+ *    • ScriptRunner ≥ 7.15  (DC/Server)
+ *    • Schreibzugriff auf /mnt/jira-archive (oder anpassen)
+ */
+
 import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.jira.issue.export.IssueXmlExporter
+import com.atlassian.jira.issue.Issue
 import com.atlassian.jira.issue.attachment.AttachmentManager
-import java.util.zip.*
+import com.atlassian.jira.issue.views.IssueXMLView
+import com.atlassian.jira.plugin.issueview.IssueViewRequestParamsImpl
+import com.atlassian.jira.util.io.IOUtil
+import java.util.zip.ZipOutputStream
+import java.util.zip.ZipEntry
 
-def projectKey   = 'DEMO'
-def outFile      = new File("/archive/${projectKey}-${new Date().format('yyyyMMdd')}.zip")
-def proj         = ComponentAccessor.projectManager.getProjectByCurrentKey(projectKey)
-def issueManager = ComponentAccessor.issueManager
-def attachMgr    = ComponentAccessor.getComponent(AttachmentManager)
-def exporter     = ComponentAccessor.getComponent(IssueXmlExporter)
+// ---------------- PARAMETER ----------------
+def PROJECT_KEY = 'DEMO'                          // ► anpassen / Parameterisieren
+def TARGET_DIR  = new File('/mnt/jira-archive')   // ► NFS-Share für DOMEA
+//--------------------------------------------
 
-outFile.withOutputStream { fos ->
+// ► Project & Services
+def project      = ComponentAccessor.projectManager.getProjectByCurrentKey(PROJECT_KEY)
+assert project   : "Projekt $PROJECT_KEY nicht gefunden!"
+def issueMgr     = ComponentAccessor.issueManager
+def attachMgr    = ComponentAccessor.attachmentManager as AttachmentManager
+def xmlView      = ComponentAccessor.getComponent(IssueXMLView)
+def user         = ComponentAccessor.jiraAuthenticationContext.loggedInUser
+def params       = new IssueViewRequestParamsImpl.Builder(user, null)
+                    .withRenderedContent(true).build()
+
+// ► Ziel-ZIP
+TARGET_DIR.mkdirs()
+def zipFile = new File(TARGET_DIR, "${PROJECT_KEY}-${new Date().format('yyyyMMdd')}.zip")
+
+zipFile.withOutputStream { fos ->
     def zip = new ZipOutputStream(fos)
-    // alle Issues ermitteln
-    issueManager.getIssueIdsForProject(proj.id).each { id ->
-        def issue = issueManager.getIssueObject(id)
-        // 1) Issue-XML
+
+    issueMgr.getIssueIdsForProject(project.id).each { id ->
+        Issue issue = issueMgr.getIssueObject(id)
+
+        /* ---- XML-Eintrag ---- */
         zip.putNextEntry(new ZipEntry("issues/${issue.key}.xml"))
-        exporter.exportAsXML(issue, zip)
+        zip.write(xmlView.getBody(issue, params).getBytes('UTF-8'))
         zip.closeEntry()
-        // 2) Anhänge streamen
+
+        /* ---- Anhänge ---- */
         attachMgr.getAttachments(issue).each { att ->
-            def attFile = attachMgr.getAttachmentFile(att)
+            def src = attachMgr.getAttachmentFile(att)
             zip.putNextEntry(new ZipEntry("attachments/${issue.key}/${att.filename}"))
-            attFile.withInputStream { it.transferTo(zip) }
+            src.withInputStream { IOUtil.copy(it, zip) }
             zip.closeEntry()
         }
     }
     zip.close()
 }
-log.info "ZIP-Export ${outFile.name} erzeugt (${outFile.length() / 1024} KB)"
+
+log.info "ZIP-Export fertig unter ${zipFile.absolutePath} (${zipFile.length() / 1024} KB)"
