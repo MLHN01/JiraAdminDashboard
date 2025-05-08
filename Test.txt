@@ -1,60 +1,14 @@
-/*
- *  ArchiveProjectAsZip.groovy
- *  Exportiert alle Vorgänge + Anhänge eines Projekts in ein ZIP.
- *
- *  Voraussetzungen:
- *    • ScriptRunner ≥ 7.15  (DC/Server)
- *    • Schreibzugriff auf /mnt/jira-archive (oder anpassen)
- */
-
-import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.jira.issue.Issue
-import com.atlassian.jira.issue.attachment.AttachmentManager
-import com.atlassian.jira.issue.views.IssueXMLView
+import com.atlassian.jira.plugin.issueview.IssueViewFieldParamsImpl
 import com.atlassian.jira.plugin.issueview.IssueViewRequestParamsImpl
-import com.atlassian.jira.util.io.IOUtil
-import java.util.zip.ZipOutputStream
-import java.util.zip.ZipEntry
 
-// ---------------- PARAMETER ----------------
-def PROJECT_KEY = 'DEMO'                          // ► anpassen / Parameterisieren
-def TARGET_DIR  = new File('/mnt/jira-archive')   // ► NFS-Share für DOMEA
-//--------------------------------------------
+// leere Field-Parameter – wir brauchen nur das Standard-XML
+def fieldParams = new IssueViewFieldParamsImpl(
+        false,           // customViewRequested
+        []  as Set,      // fieldIds
+        []  as Set,      // orderableFieldIds
+        []  as Set,      // customFieldIds
+        false            // allCustomFields
+)
 
-// ► Project & Services
-def project      = ComponentAccessor.projectManager.getProjectByCurrentKey(PROJECT_KEY)
-assert project   : "Projekt $PROJECT_KEY nicht gefunden!"
-def issueMgr     = ComponentAccessor.issueManager
-def attachMgr    = ComponentAccessor.attachmentManager as AttachmentManager
-def xmlView      = ComponentAccessor.getComponent(IssueXMLView)
-def user         = ComponentAccessor.jiraAuthenticationContext.loggedInUser
-def params       = new IssueViewRequestParamsImpl.Builder(user, null)
-                    .withRenderedContent(true).build()
-
-// ► Ziel-ZIP
-TARGET_DIR.mkdirs()
-def zipFile = new File(TARGET_DIR, "${PROJECT_KEY}-${new Date().format('yyyyMMdd')}.zip")
-
-zipFile.withOutputStream { fos ->
-    def zip = new ZipOutputStream(fos)
-
-    issueMgr.getIssueIdsForProject(project.id).each { id ->
-        Issue issue = issueMgr.getIssueObject(id)
-
-        /* ---- XML-Eintrag ---- */
-        zip.putNextEntry(new ZipEntry("issues/${issue.key}.xml"))
-        zip.write(xmlView.getBody(issue, params).getBytes('UTF-8'))
-        zip.closeEntry()
-
-        /* ---- Anhänge ---- */
-        attachMgr.getAttachments(issue).each { att ->
-            def src = attachMgr.getAttachmentFile(att)
-            zip.putNextEntry(new ZipEntry("attachments/${issue.key}/${att.filename}"))
-            src.withInputStream { IOUtil.copy(it, zip) }
-            zip.closeEntry()
-        }
-    }
-    zip.close()
-}
-
-log.info "ZIP-Export fertig unter ${zipFile.absolutePath} (${zipFile.length() / 1024} KB)"
+// damit erstellt du das Request-Objekt
+def params = new IssueViewRequestParamsImpl(fieldParams)
