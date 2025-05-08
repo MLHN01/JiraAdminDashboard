@@ -1,9 +1,33 @@
-// AUI-Message Box mit Icon
-return """
-<div class="aui-message aui-message-warning" style="margin-top:1em">
-    <span class="aui-icon aui-icon-warning"></span>
-    <strong>Wichtiger Hinweis:&nbsp;</strong>
-    Bitte prüfe vor dem Anlegen, ob der Mitarbeiter bereits im <em>AD</em> vorhanden ist
-    und ob die korrekte E-Mail-Domain verwendet wird.
-</div>
-"""
+@Grab(group='commons-io', module='commons-io', version='2.15.1')    // nur falls nicht schon vorhanden
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.issue.export.IssueXmlExporter
+import com.atlassian.jira.issue.attachment.AttachmentManager
+import java.util.zip.*
+
+def projectKey   = 'DEMO'
+def outFile      = new File("/archive/${projectKey}-${new Date().format('yyyyMMdd')}.zip")
+def proj         = ComponentAccessor.projectManager.getProjectByCurrentKey(projectKey)
+def issueManager = ComponentAccessor.issueManager
+def attachMgr    = ComponentAccessor.getComponent(AttachmentManager)
+def exporter     = ComponentAccessor.getComponent(IssueXmlExporter)
+
+outFile.withOutputStream { fos ->
+    def zip = new ZipOutputStream(fos)
+    // alle Issues ermitteln
+    issueManager.getIssueIdsForProject(proj.id).each { id ->
+        def issue = issueManager.getIssueObject(id)
+        // 1) Issue-XML
+        zip.putNextEntry(new ZipEntry("issues/${issue.key}.xml"))
+        exporter.exportAsXML(issue, zip)
+        zip.closeEntry()
+        // 2) Anhänge streamen
+        attachMgr.getAttachments(issue).each { att ->
+            def attFile = attachMgr.getAttachmentFile(att)
+            zip.putNextEntry(new ZipEntry("attachments/${issue.key}/${att.filename}"))
+            attFile.withInputStream { it.transferTo(zip) }
+            zip.closeEntry()
+        }
+    }
+    zip.close()
+}
+log.info "ZIP-Export ${outFile.name} erzeugt (${outFile.length() / 1024} KB)"
