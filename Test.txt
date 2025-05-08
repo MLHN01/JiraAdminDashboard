@@ -1,18 +1,6 @@
-import com.atlassian.jira.util.io.IOUtil          // schon vorhanden
-import com.atlassian.jira.util.io.InputStreamConsumer
-import java.util.zip.ZipEntry
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.config.util.JiraHome
 
-/* ---- Anhänge ---- */
-attachMgr.getAttachments(issue).each { att ->
-
-    // ZIP-Eintrag anlegen
-    zip.putNextEntry(new ZipEntry("attachments/${issue.key}/${att.filename}"))
-
-    // Content streamen → direkt in den ZipOutputStream kopieren
-    attachMgr.streamAttachmentContent(att) { InputStream is ->
-        IOUtil.copy(is, zip)          // effizient, keine großen Puffer nötig
-        return null                   // Consumer-Interface verlangt ein Ergebnis
-    } as InputStreamConsumer<Void>
-
-    zip.closeEntry()
-}
+def jiraHome  = ComponentAccessor.getComponent(JiraHome).home          // …/data/jira
+def TARGET_DIR = new File("${jiraHome}/export/archive")                // immer vorhanden
+TARGET_DIR.mkdirs()                                                    // erzeugt den Ordner rekursiv
