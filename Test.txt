@@ -1,14 +1,18 @@
-import com.atlassian.jira.plugin.issueview.IssueViewFieldParamsImpl
-import com.atlassian.jira.plugin.issueview.IssueViewRequestParamsImpl
+import com.atlassian.jira.util.io.IOUtil          // schon vorhanden
+import com.atlassian.jira.util.io.InputStreamConsumer
+import java.util.zip.ZipEntry
 
-// leere Field-Parameter – wir brauchen nur das Standard-XML
-def fieldParams = new IssueViewFieldParamsImpl(
-        false,           // customViewRequested
-        []  as Set,      // fieldIds
-        []  as Set,      // orderableFieldIds
-        []  as Set,      // customFieldIds
-        false            // allCustomFields
-)
+/* ---- Anhänge ---- */
+attachMgr.getAttachments(issue).each { att ->
 
-// damit erstellt du das Request-Objekt
-def params = new IssueViewRequestParamsImpl(fieldParams)
+    // ZIP-Eintrag anlegen
+    zip.putNextEntry(new ZipEntry("attachments/${issue.key}/${att.filename}"))
+
+    // Content streamen → direkt in den ZipOutputStream kopieren
+    attachMgr.streamAttachmentContent(att) { InputStream is ->
+        IOUtil.copy(is, zip)          // effizient, keine großen Puffer nötig
+        return null                   // Consumer-Interface verlangt ein Ergebnis
+    } as InputStreamConsumer<Void>
+
+    zip.closeEntry()
+}
