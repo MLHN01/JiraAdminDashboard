@@ -1,6 +1,58 @@
-import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.jira.config.util.JiraHome
+/**
+ * Kopiert alle Benutzer aus einer bestehenden Jira-Gruppe
+ * in eine neue (oder bereits existierende) Zielgruppe.
+ *
+ * Ausführen z. B. über Administration → Add-ons → Script Console
+ * oder als Custom Script im ScriptRunner-UI.
+ */
 
-def jiraHome  = ComponentAccessor.getComponent(JiraHome).home          // …/data/jira
-def TARGET_DIR = new File("${jiraHome}/export/archive")                // immer vorhanden
-TARGET_DIR.mkdirs()                                                    // erzeugt den Ordner rekursiv
+import com.atlassian.jira.component.ComponentAccessor
+import com.onresolve.scriptrunner.parameters.annotation.GroupPicker
+import com.onresolve.scriptrunner.parameters.annotation.ShortTextInput
+import com.onresolve.scriptrunner.parameters.annotation.Description
+
+// ---------- Eingabeparameter ----------
+
+@GroupPicker(
+    label       = 'Quellgruppe',
+    description = 'Wähle die Gruppe, deren Mitglieder kopiert werden sollen'
+)
+@Description('Gruppe, aus der kopiert wird')
+String sourceGroupName
+
+@ShortTextInput(
+    label       = 'Name der neuen Zielgruppe',
+    description = 'Gib den Namen ein; wird automatisch angelegt, falls sie noch nicht existiert'
+)
+@Description('Neue oder bestehende Zielgruppe')
+String targetGroupName
+
+// ---------- Logik ----------
+
+def groupManager = ComponentAccessor.groupManager
+def userUtil     = ComponentAccessor.userUtil   // alternative APIs funktionieren ebenfalls
+
+assert sourceGroupName : 'Keine Quellgruppe gewählt!'
+assert targetGroupName : 'Kein Zielgruppen-Name angegeben!'
+
+def sourceGroup = groupManager.getGroup(sourceGroupName)
+assert sourceGroup : "Die Quellgruppe '${sourceGroupName}' existiert nicht."
+
+// Zielgruppe anlegen, falls nötig
+def targetGroup = groupManager.getGroup(targetGroupName)
+if (!targetGroup) {
+    log.info "Lege Zielgruppe '${targetGroupName}' an …"
+    targetGroup = groupManager.createGroup(targetGroupName)
+}
+
+def users = groupManager.getUsersInGroup(sourceGroup)
+def added = 0
+
+users.each { user ->
+    if (!groupManager.isUserInGroup(user, targetGroup)) {
+        groupManager.addUserToGroup(user, targetGroup)
+        added++
+    }
+}
+
+return "Fertig: ${added} Benutzer aus '${sourceGroupName}' in '${targetGroupName}' übertragen."
