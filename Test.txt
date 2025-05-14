@@ -1,21 +1,55 @@
-Map<String, Integer> activeUserCountMap = new HashMap<>();
-Map<String, Integer> inactiveUserCountMap = new HashMap<>();
+function exportGroupAsCSV(groupName) {
+    const maxResults = 100;
+    let startAt = 0;
+    let allUsers = [];
 
-
-
-List<ApplicationUser> usersInGroup = new ArrayList<>(groupManager.getUsersInGroup(group));
-groupUserMapping.put(group.getName(), usersInGroup);
-kmUsers.addAll(usersInGroup);
-
-// aktive/inaktive zählen
-int active = 0;
-int inactive = 0;
-for (ApplicationUser user : usersInGroup) {
-    if (user.isActive()) {
-        active++;
-    } else {
-        inactive++;
+    function fetchPage(callback) {
+        $.ajax({
+            url: '/rest/api/2/group/member',
+            type: 'GET',
+            dataType: 'json',
+            data: {
+                groupname: groupName,
+                includeInactiveUsers: 'false',
+                startAt: startAt,
+                maxResults: maxResults
+            },
+            success: function(data) {
+                allUsers = allUsers.concat(data.values);
+                if (data.values.length === maxResults) {
+                    startAt += maxResults;
+                    fetchPage(callback); // Nächste Seite
+                } else {
+                    callback(allUsers); // Alle Seiten fertig
+                }
+            },
+            error: function(err) {
+                console.error('Fehler beim Laden der Gruppenmitglieder:', err);
+            }
+        });
     }
+
+    fetchPage(function(users) {
+        // CSV exportieren
+        const rows = [];
+        rows.push(['UserName', 'DisplayName', 'Email'].join(';'));
+
+        users.forEach(function(user) {
+            const userName = user.name || '';
+            const displayName = user.displayName || '';
+            const email = user.emailAddress || '';
+            rows.push([userName, displayName, email].join(';'));
+        });
+
+        const csvContent = "\uFEFF" + rows.join('\n');
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `${groupName}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    });
 }
-activeUserCountMap.put(group.getName(), active);
-inactiveUserCountMap.put(group.getName(), inactive);
