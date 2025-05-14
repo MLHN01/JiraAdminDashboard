@@ -1,9 +1,9 @@
 function exportGroupAsCSV(groupName) {
-    const maxResults = 100;
+    const maxResults = 50; // Jira liefert standardmäßig nur 50!
     let startAt = 0;
     let allUsers = [];
 
-    function fetchPage(callback) {
+    function fetchNextPage() {
         $.ajax({
             url: '/rest/api/2/group/member',
             type: 'GET',
@@ -16,40 +16,42 @@ function exportGroupAsCSV(groupName) {
             },
             success: function(data) {
                 allUsers = allUsers.concat(data.values);
-                if (data.values.length === maxResults) {
+                if (data.values && data.values.length === maxResults) {
                     startAt += maxResults;
-                    fetchPage(callback); // Nächste Seite
+                    fetchNextPage(); // Weitere Seite laden
                 } else {
-                    callback(allUsers); // Alle Seiten fertig
+                    // Alle Daten da – CSV generieren
+                    exportUsersToCSV(groupName, allUsers);
                 }
             },
             error: function(err) {
-                console.error('Fehler beim Laden der Gruppenmitglieder:', err);
+                console.error("Fehler beim Abrufen der Mitglieder:", err);
             }
         });
     }
 
-    fetchPage(function(users) {
-        // CSV exportieren
-        const rows = [];
-        rows.push(['UserName', 'DisplayName', 'Email'].join(';'));
+    fetchNextPage();
+}
 
-        users.forEach(function(user) {
-            const userName = user.name || '';
-            const displayName = user.displayName || '';
-            const email = user.emailAddress || '';
-            rows.push([userName, displayName, email].join(';'));
-        });
+function exportUsersToCSV(groupName, users) {
+    const rows = [];
+    rows.push(['UserName', 'DisplayName', 'Email'].join(';'));
 
-        const csvContent = "\uFEFF" + rows.join('\n');
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const blobUrl = URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `${groupName}.csv`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    users.forEach(function(user) {
+        const userName = user.name || '';
+        const displayName = user.displayName || '';
+        const email = user.emailAddress || '';
+        rows.push([userName, displayName, email].join(';'));
     });
+
+    const csvContent = "\uFEFF" + rows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = `${groupName}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
