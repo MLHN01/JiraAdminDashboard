@@ -1,8 +1,8 @@
-Map<String, List<ApplicationUser>> sortedGroupUserMapping = new LinkedHashMap<>();
-
-groupUserMapping.entrySet().stream()
-    .sorted(Comparator.comparingInt(entry -> extractKmNumber(entry.getKey())))
-    .forEachOrdered(entry -> sortedGroupUserMapping.put(entry.getKey(), entry.getValue()));
-
-// Alte Map durch sortierte ersetzen
-groupUserMapping = sortedGroupUserMapping;
+private int extractKmNumber(String groupName) {
+    try {
+        // Beispiel: "KM12345" → 12345
+        return Integer.parseInt(groupName.replaceAll("[^\\d]", ""));
+    } catch (NumberFormatException e) {
+        return Integer.MAX_VALUE; // Damit unsaubere Namen ganz unten landen
+    }
+}
