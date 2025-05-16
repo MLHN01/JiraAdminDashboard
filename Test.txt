@@ -1,4 +1,6 @@
-for (List<Project> projectList : kmProjectCategories.values()) {
-    projectList.sort(Comparator.comparing(Project::getName, String.CASE_INSENSITIVE_ORDER));
-}
+// Map in eine neue sortierte Map umwandeln (nach Schlüssel alphabetisch)
+Map<String, List<Project>> sorted = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+sorted.putAll(kmProjectCategories);
 
+// Die sortierte Map in dieselbe Variable schreiben
+kmProjectCategories = sorted;
