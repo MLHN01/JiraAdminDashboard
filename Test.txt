@@ -1,6 +1,8 @@
-// Map in eine neue sortierte Map umwandeln (nach Schlüssel alphabetisch)
-Map<String, List<Project>> sorted = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
-sorted.putAll(kmProjectCategories);
+Map<String, List<ApplicationUser>> sortedGroupUserMapping = new LinkedHashMap<>();
 
-// Die sortierte Map in dieselbe Variable schreiben
-kmProjectCategories = sorted;
+groupUserMapping.entrySet().stream()
+    .sorted(Comparator.comparingInt(entry -> extractKmNumber(entry.getKey())))
+    .forEachOrdered(entry -> sortedGroupUserMapping.put(entry.getKey(), entry.getValue()));
+
+// Alte Map durch sortierte ersetzen
+groupUserMapping = sortedGroupUserMapping;
