@@ -1,50 +1,55 @@
 import com.atlassian.jira.component.ComponentAccessor
 import com.atlassian.jira.security.roles.ProjectRoleManager
 
-def categoryRegex   = ~/^.+\/\s*KM\d+$/    // Projekte mit KM-Kategorie
-def usernameRegex   = ~/^.*\(HZD\)$/       // nur HZD-User
-def excludeGroup    = "jira-administrators"
-def kmGroupRegex    = ~/^KM\d+$/           // Gruppennamen-Muster
+def categoryRegex = ~/^.+\/\s*KM\d+$/      // Projektkategorie-Muster
+def usernameRegex = ~/^.*\(HZD\)$/         // nur HZD-User
+def excludeGroup  = "jira-administrators"  // System-Admins
+def kmGroupRegex  = ~/^KM\d+$/             // Gruppennamen-Muster
 
-def pm   = ComponentAccessor.projectManager
-def prm  = ComponentAccessor.getComponent(ProjectRoleManager)
-def gm   = ComponentAccessor.groupManager
+def pm  = ComponentAccessor.projectManager
+def prm = ComponentAccessor.getComponent(ProjectRoleManager)
+def gm  = ComponentAccessor.groupManager
 
-// 1) Alle HZD-User aus passenden Projekten sammeln
-Set<ApplicationUser> hzdUsers = [] as Set
+def excluded = gm.getUsersInGroup(excludeGroup)*.username as Set<String>
+def seenHzd  = [] as Set<String>
+
+// 1) Einmal alle HZD-User in KM-Projekten sammeln
 pm.getProjectObjects().each { proj ->
-    def cat = proj.projectCategory?.name?.trim()
-    if (!(cat ==~ categoryRegex)) return
-
+    if (!(proj.projectCategory?.name?.trim() ==~ categoryRegex)) return
     prm.getProjectRoles().each { role ->
         prm.getProjectRoleActors(role, proj).applicationUsers.each { u ->
-            if (!u.active) return
-            if (u.username in gm.getUsersInGroup(excludeGroup)*.username) return
-            if (!(u.displayName ==~ usernameRegex)) return
-
-            hzdUsers.add(u)
+            if (u.active && !(u.username in excluded) && (u.displayName ==~ usernameRegex)) {
+                seenHzd << u.username
+            }
         }
     }
 }
 
-// 2) Ausgabe bauen
 def out = new StringBuilder()
-out << "<b>Gesamtzahl eindeutiger HZD-User aus KM-Projekten:</b> ${hzdUsers.size()}<br><br>"
-out << "<table border='1'><tr><th>Benutzer</th><th>KM-Gruppen</th></tr>"
+// Gesamtzahl eindeutiger HZD-User
+out << "<b>Gesamtzahl eindeutiger HZD-User in KM-Projekten:</b> ${seenHzd.size()}<br><br>"
+// Tabelle
+out << "<table border='1'><tr><th>Projekt</th><th>Benutzer</th><th>KM-Gruppe</th></tr>"
 
-hzdUsers.sort { a,b -> a.displayName <=> b.displayName }.each { user ->
-    // alle Gruppen des Users, die wie "KM12345" heißen
-    def kms = gm.getGroupsForUser(user)
-                .findAll { it.name ==~ kmGroupRegex }
-                *.name
-                .sort()
+pm.getProjectObjects().each { proj ->
+    if (!(proj.projectCategory?.name?.trim() ==~ categoryRegex)) return
+    prm.getProjectRoles().each { role ->
+        prm.getProjectRoleActors(role, proj).applicationUsers.each { u ->
+            if (!(u.active && !(u.username in excluded) && (u.displayName ==~ usernameRegex))) return
 
-    if (kms) {
-        kms.each { km ->
-            out << "<tr><td>${user.displayName}</td><td>${km}</td></tr>"
+            // alle KM-Gruppen des Users
+            def kms = gm.getGroupsForUser(u)
+                        .findAll { it.name ==~ kmGroupRegex }
+                        *.name
+                        .sort()
+            if (kms) {
+                kms.each { km ->
+                    out << "<tr><td>${proj.name}</td><td>${u.displayName}</td><td>${km}</td></tr>"
+                }
+            } else {
+                out << "<tr><td>${proj.name}</td><td>${u.displayName}</td><td></td></tr>"
+            }
         }
-    } else {
-        out << "<tr><td>${user.displayName}</td><td></td></tr>"
     }
 }
 
