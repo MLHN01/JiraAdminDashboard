@@ -14,16 +14,18 @@ def projectRoleManager = ComponentAccessor.getComponent(ProjectRoleManager)
 def groupManager = ComponentAccessor.groupManager
 def excludedUsernames = groupManager.getUsersInGroup(excludeGroup)*.username as Set
 
-// === Datenstruktur für Benutzer und deren Kategorien ===
-Map<String, Set<String>> userToCategories = [:].withDefault { new HashSet<>() }
-Set<String> allMatchingCategories = new TreeSet<>() // für Tabellen-Spalten, alphabetisch sortiert
+Set<String> uniqueUsers = [] as Set
+StringBuilder output = new StringBuilder()
+
+// === Tabelle vorbereiten ===
+output << "<b>Zuordnung von Benutzern zu KM-Gruppen:</b><br><br>"
+output << "<table border='1' cellpadding='5' cellspacing='0'>"
+output << "<tr><th>Benutzer</th><th>KM-Gruppe</th></tr>"
 
 // === Projekte durchlaufen ===
 projectManager.getProjectObjects().each { Project project ->
     def category = project.projectCategory?.name?.trim()
     if (!category || !(category ==~ categoryRegex)) return
-
-    allMatchingCategories << category
 
     projectRoleManager.getProjectRoles().each { role ->
         def users = projectRoleManager.getProjectRoleActors(role, project).applicationUsers
@@ -32,31 +34,13 @@ projectManager.getProjectObjects().each { Project project ->
             if (user.username in excludedUsernames) return
             if (!(user.displayName ==~ usernameDisplayRegex)) return
 
-            userToCategories[user.displayName] << category
+            uniqueUsers << user.displayName
+            output << "<tr><td>${user.displayName}</td><td>${category}</td></tr>"
         }
     }
 }
 
-// === Tabelle erzeugen ===
-StringBuilder output = new StringBuilder()
-output << "<table border='1' cellpadding='5' cellspacing='0'>"
-output << "<tr><th>Benutzer</th>"
-
-allMatchingCategories.each { category ->
-    output << "<th>${category}</th>"
-}
-output << "</tr>"
-
-userToCategories.keySet().sort().each { user ->
-    output << "<tr><td>${user}</td>"
-    allMatchingCategories.each { category ->
-        output << "<td style='text-align:center'>"
-        output << (category in userToCategories[user] ? "✔️" : "")
-        output << "</td>"
-    }
-    output << "</tr>"
-}
 output << "</table><br><br>"
+output.insert(0, "<b>Gesamtzahl eindeutiger Benutzer mit (HZD):</b> ${uniqueUsers.size()}<br><br>")
 
-output << "<b>Gesamtzahl eindeutiger Benutzer:</b> ${userToCategories.keySet().size()}"
 return output.toString()
