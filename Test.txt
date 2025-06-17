@@ -1,55 +1,62 @@
 import com.atlassian.jira.component.ComponentAccessor
 import com.atlassian.jira.project.Project
-import com.atlassian.jira.project.ProjectManager
 import com.atlassian.jira.security.roles.ProjectRoleManager
 import com.atlassian.jira.user.ApplicationUser
 import com.atlassian.jira.security.groups.GroupManager
 
 // === Konfiguration ===
-def categoryRegex = ~/.*HZD.*/             // Regex für Projektkategorie
-def usernameRegex = ~/.*HZD.*/             // Regex für Benutzername
-def excludeGroup = "jira-administrators"   // Gruppe, die ausgeschlossen wird
+def categoryRegex = ~/^.+\/\s*KM\d+$/
+def usernameDisplayRegex = ~/^.*\(HZD\)$/
+def excludeGroup = "jira-administrators"
 
-// === Abhängigkeiten laden ===
-def projectManager = ComponentAccessor.getProjectManager()
+def projectManager = ComponentAccessor.projectManager
 def projectRoleManager = ComponentAccessor.getComponent(ProjectRoleManager)
-def groupManager = ComponentAccessor.getGroupManager()
+def groupManager = ComponentAccessor.groupManager
+def excludedUsernames = groupManager.getUsersInGroup(excludeGroup)*.username as Set
 
-def excludedUsers = groupManager.getUsersInGroup(excludeGroup)*.username as Set
+// === Datenstruktur für Benutzer und deren Kategorien ===
+Map<String, Set<String>> userToCategories = [:].withDefault { new HashSet<>() }
+Set<String> allMatchingCategories = new TreeSet<>() // für Tabellen-Spalten, alphabetisch sortiert
 
-int totalMatchingUsers = 0
-StringBuilder output = new StringBuilder()
-
-// === Alle Projekte durchlaufen ===
+// === Projekte durchlaufen ===
 projectManager.getProjectObjects().each { Project project ->
-    def category = project.projectCategory?.name
-    if (category == null || !(category ==~ categoryRegex)) return
+    def category = project.projectCategory?.name?.trim()
+    if (!category || !(category ==~ categoryRegex)) return
 
-    Set<String> matchingUsersInProject = [] as Set
+    allMatchingCategories << category
 
-    // Alle Rollen im Projekt prüfen
     projectRoleManager.getProjectRoles().each { role ->
         def users = projectRoleManager.getProjectRoleActors(role, project).applicationUsers
         users.each { ApplicationUser user ->
             if (!user.active) return
-            if (user.username in excludedUsers) return
-            if (!(user.username ==~ usernameRegex)) return
+            if (user.username in excludedUsernames) return
+            if (!(user.displayName ==~ usernameDisplayRegex)) return
 
-            matchingUsersInProject << user.username
+            userToCategories[user.displayName] << category
         }
-    }
-
-    // Ausgabe pro Projekt
-    if (!matchingUsersInProject.isEmpty()) {
-        output << "<b>Projekt:</b> ${project.name} (${project.key})<br>"
-        matchingUsersInProject.each {
-            output << "&nbsp;&nbsp;- ${it}<br>"
-        }
-        output << "<br>"
-        totalMatchingUsers += matchingUsersInProject.size()
     }
 }
 
-// === Gesamtausgabe ===
-output << "<b>Gesamtzahl der passenden Benutzer:</b> ${totalMatchingUsers}"
+// === Tabelle erzeugen ===
+StringBuilder output = new StringBuilder()
+output << "<table border='1' cellpadding='5' cellspacing='0'>"
+output << "<tr><th>Benutzer</th>"
+
+allMatchingCategories.each { category ->
+    output << "<th>${category}</th>"
+}
+output << "</tr>"
+
+userToCategories.keySet().sort().each { user ->
+    output << "<tr><td>${user}</td>"
+    allMatchingCategories.each { category ->
+        output << "<td style='text-align:center'>"
+        output << (category in userToCategories[user] ? "✔️" : "")
+        output << "</td>"
+    }
+    output << "</tr>"
+}
+output << "</table><br><br>"
+
+output << "<b>Gesamtzahl eindeutiger Benutzer:</b> ${userToCategories.keySet().size()}"
 return output.toString()
