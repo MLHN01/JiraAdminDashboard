@@ -1,51 +1,34 @@
 import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.jira.security.roles.ProjectRoleManager
 
-def categoryRegex = ~/^.+\/\s*KM\d+$/
 def usernameRegex = ~/^.*\(HZD\)$/
+def kmGroupRegex = ~/^KM\d+$/
 def excludeGroup  = "jira-administrators"
 
-def pm  = ComponentAccessor.projectManager
-def prm = ComponentAccessor.getComponent(ProjectRoleManager)
-def gm  = ComponentAccessor.groupManager
+def um = ComponentAccessor.userManager
+def gm = ComponentAccessor.groupManager
 
-Set<String> excluded = gm.getUsersInGroup(excludeGroup)*.username as Set<String>
-Set<String> allHzd   = new HashSet<String>()
-Map<String,Set<String>> userToKm = new HashMap<String,Set<String>>()
-
-pm.getProjectObjects().each { proj ->
-    def cat = proj.projectCategory?.name?.trim()
-    if (!(cat ==~ categoryRegex)) return
-
-    def m = (cat =~ /KM\d+/)
-    if (!m) return
-    String km = m[0]
-
-    prm.getProjectRoles().each { role ->
-        prm.getProjectRoleActors(role, proj).applicationUsers.each { u ->
-            if (!u.active || excluded.contains(u.username) || !(u.displayName ==~ usernameRegex)) return
-
-            allHzd.add(u.displayName)
-            if (!userToKm.containsKey(u.displayName)) {
-                userToKm.put(u.displayName, new HashSet<String>())
-            }
-            userToKm.get(u.displayName).add(km)
-        }
-    }
+def excluded = gm.getUsersInGroup(excludeGroup)*.username as Set<String>
+def hzdUsers = um.getAllApplicationUsers().findAll { u ->
+    u.active &&
+    !(u.username in excluded) &&
+    (u.displayName ==~ usernameRegex)
 }
 
 def out = new StringBuilder()
-out << "<b>Gesamtzahl eindeutiger HZD-Benutzer:</b> ${allHzd.size()}<br><br>"
+out << "<b>Gesamtzahl eindeutiger HZD-Benutzer:</b> ${hzdUsers.size()}<br><br>"
 out << "<table border='1'><tr><th>Benutzer</th><th>KM-Gruppe</th></tr>"
 
-allHzd.sort().each { user ->
-    def groups = userToKm.get(user)
-    if (groups && !groups.isEmpty()) {
-        groups.sort().each { g ->
-            out << "<tr><td>${user}</td><td>${g}</td></tr>"
+hzdUsers.sort { a, b -> a.displayName <=> b.displayName }.each { user ->
+    def kmGroups = gm.getGroupsForUser(user)
+                     .findAll { it.name ==~ kmGroupRegex }
+                     *.name as Set<String>
+
+    if (kmGroups) {
+        kmGroups.sort().each { grp ->
+            out << "<tr><td>${user.displayName}</td><td>${grp}</td></tr>"
         }
     } else {
-        out << "<tr><td>${user}</td><td></td></tr>"
+        out << "<tr><td>${user.displayName}</td><td></td></tr>"
     }
 }
 
