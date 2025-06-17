@@ -5,42 +5,56 @@ import com.atlassian.jira.user.ApplicationUser
 import com.atlassian.jira.security.groups.GroupManager
 
 // === Konfiguration ===
-def categoryRegex = ~/^.+\/\s*KM\d+$/
-def usernameDisplayRegex = ~/^.*\(HZD\)$/
-def excludeGroup = "jira-administrators"
+def categoryRegex         = ~/^.+\/\s*KM\d+$/     // z. B. "Abteilung7/ KM12345"
+def usernameDisplayRegex  = ~/^.*\(HZD\)$/        // nur "(HZD)"-Users
+def excludeGroup          = "jira-administrators" // Systemadmins ausschließen
 
-def projectManager = ComponentAccessor.projectManager
-def projectRoleManager = ComponentAccessor.getComponent(ProjectRoleManager)
-def groupManager = ComponentAccessor.groupManager
+// === Jira-Manager laden ===
+def projectManager      = ComponentAccessor.projectManager
+def projectRoleManager  = ComponentAccessor.getComponent(ProjectRoleManager)
+def groupManager        = ComponentAccessor.groupManager
+
+// === Gruppen-Check & Strukturen ===
 def excludedUsernames = groupManager.getUsersInGroup(excludeGroup)*.username as Set
+Set<String> uniqueHzdUsers = [] as Set
 
-Set<String> uniqueUsers = [] as Set
 StringBuilder output = new StringBuilder()
 
-// === Tabelle vorbereiten ===
-output << "<b>Zuordnung von Benutzern zu KM-Gruppen:</b><br><br>"
-output << "<table border='1' cellpadding='5' cellspacing='0'>"
-output << "<tr><th>Benutzer</th><th>KM-Gruppe</th></tr>"
+// === Überschrift mit Gesamtzahl ===
+// Wir müssen die Gesamtzahl der eindeutigen HZD-User erst ermitteln.
+// Also zwei Durchläufe: einmal sammeln, dann ausgeben.
+Map<String, List<String>> rows = [:].withDefault { [] }
 
-// === Projekte durchlaufen ===
+// 1. Sammeln
 projectManager.getProjectObjects().each { Project project ->
     def category = project.projectCategory?.name?.trim()
     if (!category || !(category ==~ categoryRegex)) return
 
     projectRoleManager.getProjectRoles().each { role ->
-        def users = projectRoleManager.getProjectRoleActors(role, project).applicationUsers
-        users.each { ApplicationUser user ->
+        projectRoleManager.getProjectRoleActors(role, project).applicationUsers.each { ApplicationUser user ->
             if (!user.active) return
             if (user.username in excludedUsernames) return
             if (!(user.displayName ==~ usernameDisplayRegex)) return
 
-            uniqueUsers << user.displayName
-            output << "<tr><td>${user.displayName}</td><td>${category}</td></tr>"
+            uniqueHzdUsers << user.displayName
+            rows[user.displayName] << category
         }
     }
 }
 
-output << "</table><br><br>"
-output.insert(0, "<b>Gesamtzahl eindeutiger Benutzer mit (HZD):</b> ${uniqueUsers.size()}<br><br>")
+// 2. Ausgabe
+output << "<b>Gesamtzahl eindeutiger HZD-Benutzer:</b> ${uniqueHzdUsers.size()}<br><br>"
 
+// Tabellenkopf
+output << "<table border='1' cellpadding='5' cellspacing='0'>"
+output << "<tr><th>Benutzer</th><th>KM-Gruppe</th></tr>"
+
+// Zeilen: eine pro (User, Kategorie)-Paar
+rows.keySet().sort().each { user ->
+    rows[user].unique().each { category ->
+        output << "<tr><td>${user}</td><td>${category}</td></tr>"
+    }
+}
+
+output << "</table>"
 return output.toString()
