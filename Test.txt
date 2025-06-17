@@ -1,8 +1,55 @@
-private int extractKmNumber(String groupName) {
-    try {
-        // Beispiel: "KM12345" → 12345
-        return Integer.parseInt(groupName.replaceAll("[^\\d]", ""));
-    } catch (NumberFormatException e) {
-        return Integer.MAX_VALUE; // Damit unsaubere Namen ganz unten landen
+import com.atlassian.jira.component.ComponentAccessor
+import com.atlassian.jira.project.Project
+import com.atlassian.jira.project.ProjectManager
+import com.atlassian.jira.security.roles.ProjectRoleManager
+import com.atlassian.jira.user.ApplicationUser
+import com.atlassian.jira.security.groups.GroupManager
+
+// === Konfiguration ===
+def categoryRegex = ~/.*HZD.*/             // Regex für Projektkategorie
+def usernameRegex = ~/.*HZD.*/             // Regex für Benutzername
+def excludeGroup = "jira-administrators"   // Gruppe, die ausgeschlossen wird
+
+// === Abhängigkeiten laden ===
+def projectManager = ComponentAccessor.getProjectManager()
+def projectRoleManager = ComponentAccessor.getComponent(ProjectRoleManager)
+def groupManager = ComponentAccessor.getGroupManager()
+
+def excludedUsers = groupManager.getUsersInGroup(excludeGroup)*.username as Set
+
+int totalMatchingUsers = 0
+StringBuilder output = new StringBuilder()
+
+// === Alle Projekte durchlaufen ===
+projectManager.getProjectObjects().each { Project project ->
+    def category = project.projectCategory?.name
+    if (category == null || !(category ==~ categoryRegex)) return
+
+    Set<String> matchingUsersInProject = [] as Set
+
+    // Alle Rollen im Projekt prüfen
+    projectRoleManager.getProjectRoles().each { role ->
+        def users = projectRoleManager.getProjectRoleActors(role, project).applicationUsers
+        users.each { ApplicationUser user ->
+            if (!user.active) return
+            if (user.username in excludedUsers) return
+            if (!(user.username ==~ usernameRegex)) return
+
+            matchingUsersInProject << user.username
+        }
+    }
+
+    // Ausgabe pro Projekt
+    if (!matchingUsersInProject.isEmpty()) {
+        output << "<b>Projekt:</b> ${project.name} (${project.key})<br>"
+        matchingUsersInProject.each {
+            output << "&nbsp;&nbsp;- ${it}<br>"
+        }
+        output << "<br>"
+        totalMatchingUsers += matchingUsersInProject.size()
     }
 }
+
+// === Gesamtausgabe ===
+output << "<b>Gesamtzahl der passenden Benutzer:</b> ${totalMatchingUsers}"
+return output.toString()
