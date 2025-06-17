@@ -5,62 +5,59 @@ import com.atlassian.jira.user.ApplicationUser
 import com.atlassian.jira.security.groups.GroupManager
 
 // === Konfiguration ===
-def categoryRegex         = ~/^.+\/\s*KM\d+$/     // z. B. "Abteilung7/ KM12345"
-def usernameDisplayRegex  = ~/^.*\(HZD\)$/        // nur "(HZD)"-Users
-def excludeGroup          = "jira-administrators" // Systemadmins ausschließen
+def categoryRegex        = ~/^.+\/\s*KM\d+$/     // z. B. "Abteilung7/ KM12345"
+def usernameDisplayRegex = ~/^.*\(HZD\)$/        // nur "(HZD)"-Users
+def excludeGroup         = "jira-administrators" // Systemadmins ausschließen
 
 // === Jira-Manager laden ===
 def projectManager      = ComponentAccessor.projectManager
 def projectRoleManager  = ComponentAccessor.getComponent(ProjectRoleManager)
 def groupManager        = ComponentAccessor.groupManager
 
-// === Vorbereitung ===
+// === Setup ===
+// Alle User, die ausgeschlossen werden sollen
 def excludedUsernames = groupManager.getUsersInGroup(excludeGroup)*.username as Set
 
-// Set aller HZD-User
-Set<String> allHzdUsers = [] as Set
+// Sammlung aller eindeutigen HZD-User
+def allHzdUsers = new HashSet<String>()
+// Map: User → Set der KM-Gruppen, in denen er ist
+def userToKmGroups = [:].withDefault { new HashSet<String>() }
 
-// Map: User → Set<String> der KM-Gruppennamen
-Map<String, Set<String>> userToKmGroups = [:].withDefault { [] as Set }
-
-// === 1. Über alle Projekte suchen und Daten sammeln ===
+// === Daten sammeln ===
 projectManager.getProjectObjects().each { Project project ->
     def rawCat = project.projectCategory?.name?.trim()
     if (!rawCat || !(rawCat ==~ categoryRegex)) return
 
-    // aus "AbteilungX/ KM12345" die Gruppe "KM12345" ziehen
-    def kmName = (rawCat =~ /KM\d+/)[0]
+    // Nur den Teil "KM12345" extrahieren
+    def matcher = (rawCat =~ /KM\d+/)
+    if (!matcher) return
+    def kmName = matcher[0]
 
     projectRoleManager.getProjectRoles().each { role ->
         projectRoleManager
-          .getProjectRoleActors(role, project)
-          .applicationUsers
-          .each { ApplicationUser user ->
-              if (!user.active) return
-              if (user.username in excludedUsernames) return
-              if (!(user.displayName ==~ usernameDisplayRegex)) return
+            .getProjectRoleActors(role, project)
+            .applicationUsers
+            .each { ApplicationUser user ->
+                if (!user.active) return
+                if (user.username in excludedUsernames) return
+                if (!(user.displayName ==~ usernameDisplayRegex)) return
 
-              // User merken
-              allHzdUsers << user.displayName
-              // KM-Gruppe zuordnen
-              userToKmGroups[user.displayName] << kmName
-          }
+                allHzdUsers.add(user.displayName)
+                userToKmGroups[user.displayName].add(kmName)
+            }
     }
 }
 
-// === 2. Ausgabe bauen ===
-StringBuilder out = new StringBuilder()
+// === Ausgabe bauen ===
+def out = new StringBuilder()
 
-// Gesamtzahl eindeutiger HZD-User
+// 1) Gesamtsumme
 out << "<b>Gesamtzahl eindeutiger HZD-Benutzer:</b> ${allHzdUsers.size()}<br><br>"
 
-// Tabelle starten
+// 2) Einfache 2-Spalten-Tabelle
 out << "<table border='1' cellpadding='5' cellspacing='0'>"
 out << "<tr><th>Benutzer</th><th>KM-Gruppe</th></tr>"
 
-// Für jeden User:  
-// - wenn er Gruppen hat → pro Gruppe eine Zeile  
-// - sonst eine Zeile mit leerem Feld
 allHzdUsers.sort().each { user ->
     def groups = userToKmGroups[user]
     if (groups && !groups.isEmpty()) {
@@ -68,11 +65,9 @@ allHzdUsers.sort().each { user ->
             out << "<tr><td>${user}</td><td>${grp}</td></tr>"
         }
     } else {
-        // kein Eintrag → leeres Feld
         out << "<tr><td>${user}</td><td></td></tr>"
     }
 }
 
 out << "</table>"
-
 return out.toString()
