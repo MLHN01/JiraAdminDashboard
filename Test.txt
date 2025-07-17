@@ -1,57 +1,34 @@
-import com.atlassian.jira.component.ComponentAccessor
-import com.atlassian.jira.security.roles.ProjectRoleManager
 
-def categoryRegex = ~/^.+\/\s*KM\d+$/      // Projektkategorie-Muster
-def usernameRegex = ~/^.*\(HZD\)$/         // nur HZD-User
-def excludeGroup  = "jira-administrators"  // System-Admins
-def kmGroupRegex  = ~/^KM\d+$/             // Gruppennamen-Muster
+// Pagination-Parameter
+def pageSize = 100
+def startIndex = 0
+def batch
+def totalProcessed = 0
 
-def pm  = ComponentAccessor.projectManager
-def prm = ComponentAccessor.getComponent(ProjectRoleManager)
-def gm  = ComponentAccessor.groupManager
+// Paginierten Ansatz verwenden
+log.warn("Beginne mit Benutzerabfrage in Batches von ${pageSize}...")
 
-def excluded = gm.getUsersInGroup(excludeGroup)*.username as Set<String>
-def seenHzd  = [] as Set<String>
-
-// 1) Einmal alle HZD-User in KM-Projekten sammeln
-pm.getProjectObjects().each { proj ->
-    if (!(proj.projectCategory?.name?.trim() ==~ categoryRegex)) return
-    prm.getProjectRoles().each { role ->
-        prm.getProjectRoleActors(role, proj).applicationUsers.each { u ->
-            if (u.active && !(u.username in excluded) && (u.displayName ==~ usernameRegex)) {
-                seenHzd << u.username
-            }
+do {
+    def searchParams = UserSearchParams.builder()
+        .allowEmptyQuery(true)
+        .includeActive(true)
+        .includeInactive(false)
+        .maxResults(pageSize)
+        .startIndex(startIndex)
+        .build()
+    
+    batch = userSearchService.findUsers("", searchParams)
+    int batchSize = batch.size()
+    
+    if (batchSize > 0) {
+        allActiveUsers.addAll(batch)
+        totalProcessed += batchSize
+        
+        // Fortschrittsanzeige alle 500 Benutzer
+        if (totalProcessed % 500 == 0 || batchSize < pageSize) {
+            log.warn("Verarbeitet: ${totalProcessed} Benutzer (${(System.currentTimeMillis() - startTime)/1000} Sekunden)")
         }
+        
+        startIndex += pageSize
     }
-}
-
-def out = new StringBuilder()
-// Gesamtzahl eindeutiger HZD-User
-out << "<b>Gesamtzahl eindeutiger HZD-User in KM-Projekten:</b> ${seenHzd.size()}<br><br>"
-// Tabelle
-out << "<table border='1'><tr><th>Projekt</th><th>Benutzer</th><th>KM-Gruppe</th></tr>"
-
-pm.getProjectObjects().each { proj ->
-    if (!(proj.projectCategory?.name?.trim() ==~ categoryRegex)) return
-    prm.getProjectRoles().each { role ->
-        prm.getProjectRoleActors(role, proj).applicationUsers.each { u ->
-            if (!(u.active && !(u.username in excluded) && (u.displayName ==~ usernameRegex))) return
-
-            // alle KM-Gruppen des Users
-            def kms = gm.getGroupsForUser(u)
-                        .findAll { it.name ==~ kmGroupRegex }
-                        *.name
-                        .sort()
-            if (kms) {
-                kms.each { km ->
-                    out << "<tr><td>${proj.name}</td><td>${u.displayName}</td><td>${km}</td></tr>"
-                }
-            } else {
-                out << "<tr><td>${proj.name}</td><td>${u.displayName}</td><td></td></tr>"
-            }
-        }
-    }
-}
-
-out << "</table>"
-return out.toString()
+} while (batch.size() == pageSize) // Solange die volle Batchgröße zurückkommt, gibt es weitere Ergebnisse
