@@ -1,15 +1,20 @@
-def issueType = getFieldById("issuetype")?.value as String
-def descField = getFieldById("description")
+final String BUG_DESCRIPTION = """ ... """
+final String EPIC_DESCRIPTION = """ ... """
+final String TASK_DESCRIPTION = """ ... """
 
-if (!descField.getValue()) {
-    switch (issueType) {
+def descriptionField = getFieldById('description')
+def issueContext = issueContext.getIssueType().name
+
+if (getActionName() in ["Create Issue", "Create"]) {
+    switch(issueContext) {
         case "Bug":
-            descField.setFormValue("Bug-Template …")
+            descriptionField.setFormValue(BUG_DESCRIPTION)
             break
-        case "Story":
-            descField.setFormValue("Story-Template …")
+        case "Epic":
+            descriptionField.setFormValue(EPIC_DESCRIPTION)
             break
-        default:
-            descField.setFormValue("")
+        case "Task":
+            descriptionField.setFormValue(TASK_DESCRIPTION)
+            break
     }
 }
