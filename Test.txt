@@ -1,34 +1,49 @@
+import com.onresolve.jira.groovy.user.FieldBehaviours
+import static com.atlassian.jira.issue.IssueFieldConstants.*
+import groovy.transform.BaseScript
 
-// Pagination-Parameter
-def pageSize = 100
-def startIndex = 0
-def batch
-def totalProcessed = 0
+@BaseScript FieldBehaviours fieldBehaviours
 
-// Paginierten Ansatz verwenden
-log.warn("Beginne mit Benutzerabfrage in Batches von ${pageSize}...")
+def descField = getFieldById(DESCRIPTION)
+def issueType = getFieldById("issuetype")?.value as String
 
-do {
-    def searchParams = UserSearchParams.builder()
-        .allowEmptyQuery(true)
-        .includeActive(true)
-        .includeInactive(false)
-        .maxResults(pageSize)
-        .startIndex(startIndex)
-        .build()
-    
-    batch = userSearchService.findUsers("", searchParams)
-    int batchSize = batch.size()
-    
-    if (batchSize > 0) {
-        allActiveUsers.addAll(batch)
-        totalProcessed += batchSize
-        
-        // Fortschrittsanzeige alle 500 Benutzer
-        if (totalProcessed % 500 == 0 || batchSize < pageSize) {
-            log.warn("Verarbeitet: ${totalProcessed} Benutzer (${(System.currentTimeMillis() - startTime)/1000} Sekunden)")
-        }
-        
-        startIndex += pageSize
-    }
-} while (batch.size() == pageSize) // Solange die volle Batchgröße zurückkommt, gibt es weitere Ergebnisse
+switch (issueType) {
+    case "Bug":
+        descField.setFormValue("""h3. Beschreibung des Fehlers
+
+*Schritte zur Reproduktion:*
+# 
+# 
+# 
+
+*Erwartetes Ergebnis:*
+
+*Tatsächliches Ergebnis:*""")
+        break
+
+    case "Story":
+        descField.setFormValue("""h3. Benutzerstory
+
+Als *[Rolle]* möchte ich *[Funktion]*, um *[Ziel]* zu erreichen.
+
+*Akzeptanzkriterien:*
+# 
+# 
+# """)
+        break
+
+    case "Task":
+        descField.setFormValue("""h3. Aufgabentext
+
+*Ziel der Aufgabe:*
+
+*Erforderliche Schritte:*
+# 
+# 
+# """)
+        break
+
+    default:
+        descField.setFormValue("") // leer lassen für andere
+        break
+}
