@@ -4,46 +4,32 @@ import groovy.transform.BaseScript
 
 @BaseScript FieldBehaviours fieldBehaviours
 
-def descField = getFieldById(DESCRIPTION)
 def issueType = getFieldById("issuetype")?.value as String
+def descField = getFieldById(DESCRIPTION)
 
-switch (issueType) {
-    case "Bug":
-        descField.setFormValue("""h3. Beschreibung des Fehlers
+if (!descField.getValue()) {
+    switch (issueType) {
+        case "Bug":
+            descField.setFormValue("""h3. Bug Report
 
 *Schritte zur Reproduktion:*
-# 
 # 
 # 
 
 *Erwartetes Ergebnis:*
 
 *Tatsächliches Ergebnis:*""")
-        break
-
-    case "Story":
-        descField.setFormValue("""h3. Benutzerstory
+            break
+        case "Story":
+            descField.setFormValue("""h3. Benutzerstory
 
 Als *[Rolle]* möchte ich *[Funktion]*, um *[Ziel]* zu erreichen.
 
 *Akzeptanzkriterien:*
 # 
-# 
 # """)
-        break
-
-    case "Task":
-        descField.setFormValue("""h3. Aufgabentext
-
-*Ziel der Aufgabe:*
-
-*Erforderliche Schritte:*
-# 
-# 
-# """)
-        break
-
-    default:
-        descField.setFormValue("") // leer lassen für andere
-        break
+            break
+        default:
+            descField.setFormValue("") // leer lassen oder Default-Template
+    }
 }
