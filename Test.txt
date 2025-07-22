@@ -1,35 +1,15 @@
-import com.onresolve.jira.groovy.user.FieldBehaviours
-import static com.atlassian.jira.issue.IssueFieldConstants.*
-import groovy.transform.BaseScript
-
-@BaseScript FieldBehaviours fieldBehaviours
-
 def issueType = getFieldById("issuetype")?.value as String
-def descField = getFieldById(DESCRIPTION)
+def descField = getFieldById("description")
 
 if (!descField.getValue()) {
     switch (issueType) {
         case "Bug":
-            descField.setFormValue("""h3. Bug Report
-
-*Schritte zur Reproduktion:*
-# 
-# 
-
-*Erwartetes Ergebnis:*
-
-*Tatsächliches Ergebnis:*""")
+            descField.setFormValue("Bug-Template …")
             break
         case "Story":
-            descField.setFormValue("""h3. Benutzerstory
-
-Als *[Rolle]* möchte ich *[Funktion]*, um *[Ziel]* zu erreichen.
-
-*Akzeptanzkriterien:*
-# 
-# """)
+            descField.setFormValue("Story-Template …")
             break
         default:
-            descField.setFormValue("") // leer lassen oder Default-Template
+            descField.setFormValue("")
     }
 }
