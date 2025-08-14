@@ -1,18 +1,14 @@
-app.version=4.0.3
-api.port=9999
+// pac.json
+{
+  "proxyType": "PAC",
+  "proxyPacFileLocation": "C:\\SEU\\winfoom-windows\\corp_proxy.pac",
+  "localPort": 8888,
 
-proxy.type=PAC
-# EINE der beiden Zeilen benutzen:
-#proxy.pac.url=http://wpad.deinefirma.local/proxy.pac
-proxy.pac.file.location=C:\\SEU\\winfoom-windows\\corp_proxy.pac
+  // Auth nur nötig, wenn die PAC einen HTTP-Proxy zurückliefert:
+  "pacHttpAuthProtocol": "NTLM",   // oder "BASIC"
+  "proxyUsername": null,
+  "proxyPassword": null,
 
-local.port=8888
-proxy.test.url=http://example.com
-
-# SSO aktivieren und Auth-Protokoll explizit setzen
-proxy.http.win.useCurrentCredentials=true
-proxy.http.auth.enabled=true
-proxy.http.auth.type=NEGOTIATE
-
-autostart=false
-autodetect=false
+  "proxyTestUrl": "http://example.com",
+  "autostart": false
+}
