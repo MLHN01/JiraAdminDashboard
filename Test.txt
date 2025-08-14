@@ -4,5 +4,8 @@
   "proxyPort": 80,
   "localPort": 8888,
   "useCurrentCredentials": true,
-  "httpAuthProtocol": "NEGOTIATE"
+  "httpAuthProtocol": "NEGOTIATE",
+  "proxyTestUrl": "http://example.com",
+  "autostart": true,
+  "autodetect": false
 }
