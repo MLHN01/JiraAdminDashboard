@@ -1,31 +1,8 @@
-app.version=4.0.3
-
-# REST-API von Winfoom (egal lassen)
-api.port=9999
-
-# === Upstream-Proxy (Firmennetz) ===
-proxy.type=HTTP
-proxy.http.host=DEIN_PROXY_HOST
-proxy.http.port=8080
-
-# Entweder Windows-SSO ODER Benutzer/Passwort – NICHT beides
-# (A) Mit Domänen-SSO:
-# proxy.http.win.useCurrentCredentials=true
-# proxy.http.auth.enabled=false
-
-# (B) Mit User/Pass (wenn SSO nicht geht):
-proxy.http.win.useCurrentCredentials=false
-proxy.http.auth.enabled=true
-# BASIC | NTLM | NEGOTIATE je nach Umgebung
-proxy.http.auth.type=BASIC
-proxy.http.auth.username=DEIN_BENUTZER
-proxy.http.auth.password=DEIN_PASSWORT
-# Nur bei NTLM nötig:
-# proxy.http.auth.domain=DEINEDOM
-
-# === Lokaler Proxy von Winfoom ===
-local.port=8888
-
-# Sonstiges
-autostart=true
-autodetect=false
+{
+  "proxyType": "HTTP",
+  "proxyHost": "internetproxy.hzd.hessen.de",
+  "proxyPort": 80,
+  "localPort": 8888,
+  "useCurrentCredentials": true,
+  "httpAuthProtocol": "NEGOTIATE"
+}
