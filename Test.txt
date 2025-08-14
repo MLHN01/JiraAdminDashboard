@@ -1,11 +1,18 @@
-{
-  "proxyType": "HTTP",
-  "proxyHost": "internetproxy.hzd.hessen.de",
-  "proxyPort": 80,
-  "localPort": 8888,
-  "useCurrentCredentials": true,
-  "httpAuthProtocol": "NEGOTIATE",
-  "proxyTestUrl": "http://example.com",
-  "autostart": true,
-  "autodetect": false
-}
+app.version=4.0.3
+api.port=9999
+
+proxy.type=PAC
+# EINE der beiden Zeilen benutzen:
+#proxy.pac.url=http://wpad.deinefirma.local/proxy.pac
+proxy.pac.file.location=C:\\SEU\\winfoom-windows\\corp_proxy.pac
+
+local.port=8888
+proxy.test.url=http://example.com
+
+# SSO aktivieren und Auth-Protokoll explizit setzen
+proxy.http.win.useCurrentCredentials=true
+proxy.http.auth.enabled=true
+proxy.http.auth.type=NEGOTIATE
+
+autostart=false
+autodetect=false
